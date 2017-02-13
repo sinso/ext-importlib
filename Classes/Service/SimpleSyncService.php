@@ -1,5 +1,5 @@
 <?php
-namespace Sinso\Typo3\Import\Library;
+namespace Sinso\Importlib\Service;
 
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
