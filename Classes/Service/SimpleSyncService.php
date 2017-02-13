@@ -134,6 +134,10 @@ class SimpleSyncService implements SingletonInterface {
             $isUpdate = true;
         }
 
+        if ($isUpdate && count($values) == 0) {
+            return;
+        }
+
         foreach ($values as $fieldName => $value) {
             $this->syncField($fieldName, $value, $targetRow, $syncStrategy);
         }
