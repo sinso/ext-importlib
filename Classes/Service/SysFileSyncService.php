@@ -19,6 +19,11 @@ class SysFileSyncService {
     protected $resourcePath;
 
     /**
+     * @var int
+     */
+    protected $resourceUid;
+
+    /**
      * SysFileSyncService constructor.
      * @param string $importName
      * @param string $tableName
@@ -31,10 +36,9 @@ class SysFileSyncService {
     }
 
     public function initializeResource($recordUid, $resourceUrl, $syncStrategy = SimpleSyncService::SYNC_PREFER_SOURCE) {
-        $resourceUid = $this->syncPhysicalResource($resourceUrl, $syncStrategy);
-        if ($resourceUid) {
+        if ($this->resourceUid = $this->syncPhysicalResource($resourceUrl, $syncStrategy)) {
             $whereFields = array(
-                'uid_local' => $resourceUid,
+                'uid_local' => $this->resourceUid,
                 'uid_foreign' => $recordUid,
                 'tablenames' => $this->tableName,
                 'fieldname' => 'image',
@@ -45,11 +49,16 @@ class SysFileSyncService {
     }
 
     public function insertUpdateRow() {
-        return $this->simpleSyncService->insertUpdateRow();
+        if ($this->resourceUid) {
+            return $this->simpleSyncService->insertUpdateRow();
+        }
+        return 0;
     }
 
     public function syncField($fieldName, $sourceValue, $syncStrategy = SimpleSyncService::SYNC_PREFER_SOURCE) {
-        $this->simpleSyncService->syncField($fieldName, $sourceValue, $syncStrategy);
+        if ($this->resourceUid) {
+            $this->simpleSyncService->syncField($fieldName, $sourceValue, $syncStrategy);
+        }
     }
 
     public function deleteAbsentRows() {
