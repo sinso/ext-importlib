@@ -167,7 +167,6 @@ class SimpleSyncService {
             $history_fields['uid'] = $this->uid;
             $result = $GLOBALS['TYPO3_DB']->exec_INSERTquery('tx_importlib_history', $history_fields);
         }
-
         $this->presentUids[] = $this->uid;
 
         return $this->uid;
