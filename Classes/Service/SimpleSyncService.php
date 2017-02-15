@@ -1,13 +1,51 @@
 <?php
 namespace Sinso\Importlib\Service;
 
-use TYPO3\CMS\Core\SingletonInterface;
+use TYPO3\CMS\Core\Log\Logger;
+use TYPO3\CMS\Core\Log\LogLevel;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
-class SimpleSyncService implements SingletonInterface {
+class SimpleSyncService {
 
+    /**
+     * var integer
+     */
     const SYNC_PREFER_SOURCE = 0;
+
+    /**
+     * var integer
+     */
     const SYNC_PREFER_TARGET = 1;
+
+    /**
+     * var integer
+     */
+    const SYNC_FORCE = 2;
+
+    /**
+     * @var string
+     */
+    protected $importName;
+
+    /**
+     * @var string
+     */
+    protected $tableName;
+
+    /**
+     * @var array
+     */
+    protected $targetRow = array();
+
+    /**
+     * @var int
+     */
+    protected $uid = 0;
+
+    /**
+     * @var array
+     */
+    protected $presentUids = array();
 
     /**
      * @var array
@@ -15,136 +53,161 @@ class SimpleSyncService implements SingletonInterface {
     protected $importHashes = array();
 
     /**
-     * @var array
+     * @var bool
      */
-    protected $presentImportKeys = array();
+    protected $isRowUpdate = FALSE;
 
-    public function test() {
-        return "asdf";
+    /**
+     * @var bool
+     */
+    protected $isHistoryUpdate = FALSE;
+
+    /**
+     * @var \TYPO3\CMS\Core\Log\Logger
+     */
+    protected $logger;
+
+    /**
+     * SysFileSyncService constructor.
+     *
+     * @param string $importName
+     * @param string $tableName
+     */
+    public function __construct($importName, $tableName) {
+        $this->importName = $importName;
+        $this->tableName = $tableName;
+        $this->logger = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\CMS\Core\Log\LogManager')->getLogger(__CLASS__);
     }
 
-    public function initTargetHashes($targetRow) {
-        if (isset($targetRow['import_hashes'])) {
-            $this->importHashes = unserialize($targetRow['import_hashes']);
+    /**
+     * @param $whereFields array
+     */
+    public function initializeRow($whereFields) {
+        $whereClause = '';
+
+        foreach ($whereFields as $name => $value) {
+            $whereClause .= " AND " . $name . " = '" . $value . "'";
+        }
+        $whereClause = substr($whereClause, 5);
+        $this->targetRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('*', $this->tableName, $whereClause);
+
+        if ($this->targetRow) {
+            $this->isRowUpdate = TRUE;
+            $this->uid = $this->targetRow['uid'];
+            $this->logger->log(LogLevel::INFO, 'Initialize existing row', array('uid' => $this->uid));
+
+            $historyRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('field_hashes', 'tx_importlib_history', $this->getHistoryWhereClause());
+            if ($historyRow) {
+                $this->logger->log(LogLevel::INFO, 'Initialize existing row with history', array('uid' => $this->uid));
+            } else {
+                $this->logger->log(LogLevel::INFO, 'Initialize existing row without history', array('uid' => $this->uid));
+            }
+
         } else {
+            $this->isRowUpdate = FALSE;
+            $this->uid = 0;
+            $this->targetRow = array();
+            // Set the fixed field values
+            foreach ($whereFields as $name => $value) {
+                $this->targetRow[$name] = $value;
+            }
+            $historyRow = NULL;
+        }
+
+        if ($historyRow) {
+            $this->isHistoryUpdate = TRUE;
+            $this->importHashes = unserialize($historyRow['field_hashes']);
+        } else {
+            $this->isHistoryUpdate = FALSE;
             $this->importHashes = array();
         }
     }
 
-    public function getTargetHashes() {
-        return serialize($this->importHashes);
-    }
-
-    public function addPresentImportKey($presentImportKey) {
-        $this->presentImportKeys[] = $presentImportKey;
-    }
-
-    public function syncField($fieldName, $sourceValue, &$targetRow, $syncStrategy = self::SYNC_PREFER_SOURCE) {
-        $this->validateFieldValue($sourceValue);
+    public function syncField($fieldName, $sourceValue, $syncStrategy = self::SYNC_PREFER_SOURCE) {
         $value = $sourceValue;
-        $sourceHash = GeneralUtility::shortMD5($sourceValue);
+        if ($syncStrategy !== self::SYNC_FORCE) {
+            $sourceHash = GeneralUtility::shortMD5($sourceValue);
 
-        if (isset($this->importHashes[$fieldName])) {
-            if ($sourceHash != $this->importHashes[$fieldName]) { // Change on source
-                if (GeneralUtility::shortMD5($targetRow[$fieldName]) != $this->importHashes[$fieldName]) { // Change on target -> conflict
-                    if ($syncStrategy === self::SYNC_PREFER_TARGET) { // No change
-                        $value = $targetRow[$fieldName];
+            if (isset($this->importHashes[$fieldName])) {
+                if ($sourceHash != $this->importHashes[$fieldName]) { // Change on source
+                    if (GeneralUtility::shortMD5($this->targetRow[$fieldName]) != $this->importHashes[$fieldName]) { // Change on target -> conflict
+                        if ($syncStrategy === self::SYNC_PREFER_TARGET) { // No change
+                            $value = $this->targetRow[$fieldName];
+                        }
                     }
                 }
             }
+            /* Update the import hash for the current source value. It does not necessarily match the target field value. */
+            $this->importHashes[$fieldName] = $sourceHash;
         }
-        /* Update the import hash for the current source value. It does not necessarily match the target field value. */
-        $this->importHashes[$fieldName] = $sourceHash;
-        $targetRow[$fieldName] = $value;
-    }
-
-    public function validateFieldValue($value) {
-        return true;
-    }
-
-
-    public function removeUnusedRecords() {
-        // TODO: Add source primary key to DB index
-        // TODO: consider language key
-
-        $result = $GLOBALS['TYPO3_DB']->exec_DELETEquery('tx_userjrtshop_domain_model_shopitem', 'import_key NOT IN (' . implode(', ', $this->presentImportKeys));
+        $this->targetRow[$fieldName] = $value;
     }
 
     /**
-     * @param string $url
-     * @param string $localPath
-     * @param string|null $localName
-     * @param int $syncStrategy
-     * @return bool|int
+     * Insert or updates the record based on the initialized row and the fields synced. The history table is kept up to
+     * date for future imports.
+     *
+     * @return int  The uid updated or newly inserted.
      */
-    public function syncPhysicalResource($url, $localPath, $localName = null, $syncStrategy = self::SYNC_PREFER_SOURCE) {
-        if (is_null($localName)) {
-            $localName = \TYPO3\CMS\Core\Utility\PathUtility::basename($url);
-        }
-        $fullLocalPath = $localPath . DIRECTORY_SEPARATOR . $localName;
+    public function insertUpdateRow() {
 
-        $targetResourceExists = file_exists($fullLocalPath);
-        $targetResourceHasChanged = false; //TODO: detect changes necessary for imported files?
-        $sourceResourceHasChanged = true; //TODO: detect changes (ETAG, CURLOPT_NOBODY+CURLOPT_FILETIME)
-
-        $syncResource = true;
-        if ($targetResourceExists && !$sourceResourceHasChanged && !$targetResourceHasChanged) {
-            $syncResource = false;
-        }
-
-        if ($syncStrategy === self::SYNC_PREFER_TARGET && $targetResourceExists && $targetResourceHasChanged) {
-            $syncResource = false;
-        }
-        //TODO: what if file was deleted intentionally and import should not create it again?
-
-        if ($syncResource) {
-            $fileData = \TYPO3\CMS\Core\Utility\GeneralUtility::getURL($url);
-            if (!$fileData) {
-                return false;
-            }
-
-            if (!\TYPO3\CMS\Core\Utility\GeneralUtility::writeFile($fullLocalPath, $fileData)) {
-                return false;
-            }
-        }
-
-        $fileObject = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance()->retrieveFileOrFolderObject($fullLocalPath);
-        return $fileObject->getUid();
-    }
-
-    /**
-     * @param string $table
-     * @param int $uid_local
-     * @param int $uid_foreign
-     * @param array $whereFields
-     * @param array $values
-     * @param int $syncStrategy
-     */
-    public function syncRelation($table, $uid_local, $uid_foreign, $whereFields = array(), $values, $syncStrategy = self::SYNC_PREFER_SOURCE) {
-        $isUpdate = false;
-        $where = "uid_local=$uid_local and uid_foreign=$uid_foreign";
-
-        foreach ($whereFields as $whereField) {
-            $where .= " and $whereField='" . $values[$whereField] . "'";
-            unset($values[$whereField]);
-        }
-
-        $targetRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow("*", $table, $where);
-        if ($targetRow) {
-            $isUpdate = true;
-        }
-
-        foreach ($values as $fieldName => $value) {
-            $this->syncField($fieldName, $value, $targetRow, $syncStrategy);
-        }
-
-        $targetRow['import_hashes'] = $this->getTargetHashes();
-
-        if ($isUpdate) {
-            $result = $GLOBALS['TYPO3_DB']->exec_UPDATEquery('tx_userjrtshop_domain_model_shopitem', 'uid = ' . $targetRow['uid'], $targetRow);
+        if ($this->isRowUpdate) {
+            $result = $GLOBALS['TYPO3_DB']->exec_UPDATEquery($this->tableName, 'uid = ' . $this->uid, $this->targetRow);
         } else {
-            $result = $GLOBALS['TYPO3_DB']->exec_INSERTquery('tx_userjrtshop_domain_model_shopitem', $targetRow);
-            $uid = $GLOBALS['TYPO3_DB']->sql_insert_id();
+            $result = $GLOBALS['TYPO3_DB']->exec_INSERTquery($this->tableName, $this->targetRow);
+            $this->uid = $GLOBALS['TYPO3_DB']->sql_insert_id();
         }
+
+        $history_fields = array('field_hashes' => serialize($this->importHashes));
+        if ($this->isHistoryUpdate) {
+            $result = $GLOBALS['TYPO3_DB']->exec_UPDATEquery('tx_importlib_history', $this->getHistoryWhereClause(), $history_fields);
+        } else {
+            $history_fields['import_name'] = $this->importName;
+            $history_fields['table_name'] = $this->tableName;
+            $history_fields['uid'] = $this->uid;
+            $result = $GLOBALS['TYPO3_DB']->exec_INSERTquery('tx_importlib_history', $history_fields);
+        }
+
+        $this->presentUids[] = $this->uid;
+
+        return $this->uid;
+    }
+
+    /**
+     * Deletes previously imported rows which are not present in the current import anymore. Import history data are
+     * deleted. For the actual records only the delete flag is updated to avoid any conflicts with existing references.
+     *
+     * @return array Uids which got deleted.
+     */
+    public function deleteAbsentRows() {
+        $deleteUids = array();
+        /* Only rows existing in the tx_importlib_history table have to be deleted. Others are not created by this
+        import and must not be deleted. */
+        if (! empty($this->presentUids)) {
+            $deleteRows = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows('uid', 'tx_importlib_history', 'uid NOT IN (' . implode(', ', $this->presentUids) . ') AND ' . $this->getHistoryBaseWhereClause());
+            foreach ($deleteRows as $deleteRow) {
+                $deleteUids[] = $deleteRow['uid'];
+            }
+        }
+        if (! empty($deleteUids)) {
+            $uidWhereClause = 'uid IN (' . implode(', ', $this->presentUids) . ')';
+            $result = $GLOBALS['TYPO3_DB']->exec_DELETEquery('tx_importlib_history', $uidWhereClause . ' AND ' . $this->getHistoryBaseWhereClause());
+            $result = $GLOBALS['TYPO3_DB']->exec_UPDATEquery($this->tableName, $uidWhereClause, array('deleted' => 1));
+        }
+        return $deleteUids;
+    }
+
+    /**
+     * @return string
+     */
+    private function getHistoryBaseWhereClause() {
+        return 'import_name = \'' . $this->importName . '\' AND table_name = \'' . $this->tableName . '\'';
+    }
+
+    /**
+     * @return string
+     */
+    private function getHistoryWhereClause() {
+        return $this->getHistoryBaseWhereClause() . ' AND uid = ' . $this->uid;
     }
 }

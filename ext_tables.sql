@@ -1,8 +1,8 @@
 CREATE TABLE tx_importlib_history (
-	uid int(11) NOT NULL auto_increment,
-	import_id varchar(255) DEFAULT '' NOT NULL,
-	field_hashes text DEFAULT '' NOT NULL,
+	import_name varchar(255) DEFAULT '' NOT NULL,
 	table_name varchar(255) DEFAULT '' NOT NULL,
+	uid int(11) NOT NULL,
+	field_hashes text DEFAULT '' NOT NULL,
 
-	PRIMARY KEY (uid)
+	PRIMARY KEY t3ver_oid (import_name, table_name, uid)
 );
