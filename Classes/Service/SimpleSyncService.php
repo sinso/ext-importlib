@@ -4,6 +4,11 @@ namespace Sinso\Importlib\Service;
 use TYPO3\CMS\Core\Log\LogLevel;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
+/**
+ * Class SimpleSyncService
+ *
+ * @package Sinso\Importlib\Service
+ */
 class SimpleSyncService {
 
     /**
@@ -79,6 +84,9 @@ class SimpleSyncService {
     }
 
     /**
+     * Initialize a new row to import. Checks whether row is an insert or an update, and the same for the history record
+     * that stores the related import hashes.
+     *
      * @param $whereFields array
      */
     public function initializeRow($whereFields) {
@@ -123,6 +131,13 @@ class SimpleSyncService {
         }
     }
 
+    /**
+     * Sync a specific field. Changes since the last import are handled by the given sync strategy.
+     *
+     * @param string $fieldName
+     * @param mixed $sourceValue
+     * @param int $syncStrategy
+     */
     public function syncField($fieldName, $sourceValue, $syncStrategy = self::SYNC_PREFER_SOURCE) {
         $value = $sourceValue;
         if ($syncStrategy !== self::SYNC_FORCE) {
@@ -133,18 +148,30 @@ class SimpleSyncService {
                     if (GeneralUtility::shortMD5($this->targetRow[$fieldName]) != $this->importHashes[$fieldName]) { // Change on target -> conflict
                         if ($syncStrategy === self::SYNC_PREFER_TARGET) { // No change
                             $value = $this->targetRow[$fieldName];
+                            $this->logger->log(LogLevel::DEBUG, 'Sync Field: Field ' . $fieldName . ' not updated (SYNC PREFER TARGET)', $this->getLogData());
+                        } else {
+                            $this->logger->log(LogLevel::DEBUG, 'Sync Field: Field ' . $fieldName . ' set to ' . $sourceValue . ' (SYNC PREFER SOURCE)', $this->getLogData());
                         }
+                    } else {
+                        $this->logger->log(LogLevel::DEBUG, 'Sync Field: Field ' . $fieldName . ' set to ' . $sourceValue . ' (NO CHANGE ON TARGET)', $this->getLogData());
                     }
+                } else {
+                    $value = $this->targetRow[$fieldName];
+                    $this->logger->log(LogLevel::DEBUG, 'Sync Field: Field ' . $fieldName . ' not updated (NO CHANGE ON SOURCE)', $this->getLogData());
                 }
+            } else {
+                $this->logger->log(LogLevel::DEBUG, 'Sync Field: Field ' . $fieldName . ' set to ' . $sourceValue . ' (NEW)', $this->getLogData());
             }
             /* Update the import hash for the current source value. It does not necessarily match the target field value. */
             $this->importHashes[$fieldName] = $sourceHash;
+        } else {
+            $this->logger->log(LogLevel::DEBUG, 'Sync Field: Field ' . $fieldName . ' set to ' . $sourceValue . ' (FORCED)', $this->getLogData());
         }
         $this->targetRow[$fieldName] = $value;
     }
 
     /**
-     * Insert or updates the record based on the initialized row and the fields synced. The history table is kept up to
+     * Inserts or updates the record based on the initialized row and the fields synced. The history table is kept up to
      * date for future imports.
      *
      * @return int  The uid updated or newly inserted.
@@ -239,10 +266,16 @@ class SimpleSyncService {
         return $this->getHistoryBaseWhereClause() . ' AND uid = ' . $this->uid;
     }
 
+    /**
+     * @return array
+     */
     private function getBaseLogData() {
         return array('importName' => $this->importName, 'tableName' => $this->tableName);
     }
 
+    /**
+     * @return array
+     */
     private function getLogData() {
         $additionalLogData = $this->getBaseLogData();
         if (!empty($this->uid)) {

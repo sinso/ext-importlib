@@ -3,6 +3,13 @@ namespace Sinso\Importlib\Service;
 
 use TYPO3\CMS\Core\Log\LogLevel;
 
+/**
+ * Class SysFileSyncService
+ *
+ * TODO Change this to a decorator of SimpleSyncService
+ *
+ * @package Sinso\Importlib\Service
+ */
 class SysFileSyncService {
 
     /**
@@ -49,6 +56,13 @@ class SysFileSyncService {
         $this->logger = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\CMS\Core\Log\LogManager')->getLogger(__CLASS__);
     }
 
+    /**
+     * Initialize a new resource to import. Loads the resource and initializes the related data row.
+     *
+     * @param int $recordUid
+     * @param string $resourceUrl
+     * @param int $syncStrategy
+     */
     public function initializeResource($recordUid, $resourceUrl, $syncStrategy = SimpleSyncService::SYNC_PREFER_SOURCE) {
         if ($this->resourceUid = $this->syncPhysicalResource($resourceUrl, $syncStrategy)) {
             $whereFields = array(
@@ -62,6 +76,11 @@ class SysFileSyncService {
         }
     }
 
+    /**
+     * Inserts or updates the related data row if the resource exists.
+     *
+     * @return int
+     */
     public function insertUpdateRow() {
         if ($this->resourceUid) {
             return $this->simpleSyncService->insertUpdateRow();
@@ -69,17 +88,32 @@ class SysFileSyncService {
         return 0;
     }
 
+    /**
+     * Syncs a specific field if the resource exists.
+     *
+     * @param string $fieldName
+     * @param mixed $sourceValue
+     * @param int $syncStrategy
+     */
     public function syncField($fieldName, $sourceValue, $syncStrategy = SimpleSyncService::SYNC_PREFER_SOURCE) {
         if ($this->resourceUid) {
             $this->simpleSyncService->syncField($fieldName, $sourceValue, $syncStrategy);
         }
     }
 
+    /**
+     * Deletes previously imported rows which are not present in the current import anymore. Only the delete flag is
+     * updated and therefore resource files must not be physically deleted.
+     *
+     * @return array
+     */
     public function deleteAbsentRows() {
         return $this->simpleSyncService->deleteAbsentRows();
     }
 
     /**
+     * Sync a specific resource.
+     *
      * @param string $url
      * @param int $syncStrategy
      * @return bool|int
@@ -126,10 +160,16 @@ class SysFileSyncService {
         return $uid;
     }
 
+    /**
+     * @return array
+     */
     private function getBaseLogData() {
         return array('importName' => $this->importName, 'tableName' => $this->tableName);
     }
 
+    /**
+     * @return array
+     */
     private function getLogData() {
         $additionalLogData = $this->getBaseLogData();
         if (! empty($this->resourceUid)) {
