@@ -96,11 +96,12 @@ class SimpleSyncService {
             $whereClause .= " AND " . $name . " = '" . $value . "'";
         }
         $whereClause = substr($whereClause, 5);
-        $this->targetRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('*', $this->tableName, $whereClause);
+        $result = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('*', $this->tableName, $whereClause);
 
-        if ($this->targetRow) {
+        if (is_array($result)) {
             $this->isRowUpdate = TRUE;
-            $this->uid = $this->targetRow['uid'];
+            $this->uid = $result['uid'];
+            $this->targetRow = $result;
 
             $historyRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('field_hashes', 'tx_importlib_history', $this->getHistoryWhereClause());
             if ($historyRow) {
@@ -109,7 +110,7 @@ class SimpleSyncService {
                 $this->logger->log(LogLevel::INFO, 'Initialize: Existing target row without history initialized', $this->getLogData());
             }
 
-        } else {
+        } elseif ($result === FALSE) {
             $this->isRowUpdate = FALSE;
             $this->uid = 0;
             $this->targetRow = array();
@@ -119,7 +120,9 @@ class SimpleSyncService {
             }
             $historyRow = NULL;
 
-            $this->logger->log(LogLevel::INFO, 'Initialize: New row initialized', $this->getLogData());
+            $this->logger->log(LogLevel::DEBUG, 'Initialize: New row initialized', $this->getLogData());
+        } else { // NULL
+            $this->logger->log(LogLevel::ERROR, 'Initialize: New row initialize FAILED', $this->getLogData());
         }
 
         if ($historyRow) {
@@ -209,8 +212,8 @@ class SimpleSyncService {
                     $this->logger->log(LogLevel::ERROR, 'Insert/Update: History row insert FAILED', $this->getLogData());
                 }
             }
+            $this->presentUids[] = $this->uid;
         }
-        $this->presentUids[] = $this->uid;
 
         return $this->uid;
     }
@@ -270,7 +273,11 @@ class SimpleSyncService {
      * @return array
      */
     private function getBaseLogData() {
-        return array('importName' => $this->importName, 'tableName' => $this->tableName);
+        $baseLogData = array('importName' => $this->importName, 'tableName' => $this->tableName);
+        if ($sqlError = $GLOBALS['TYPO3_DB']->sql_error()) {
+            $baseLogData['sqlError'] = $sqlError;
+        }
+        return $baseLogData;
     }
 
     /**
