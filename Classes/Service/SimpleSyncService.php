@@ -105,9 +105,9 @@ class SimpleSyncService {
 
             $historyRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('field_hashes', 'tx_importlib_history', $this->getHistoryWhereClause());
             if ($historyRow) {
-                $this->logger->log(LogLevel::INFO, 'Initialize: Existing target row with history initialized', $this->getLogData());
+                $this->logger->log(LogLevel::DEBUG, 'Initialize: Existing target row with history initialized', $this->getLogData());
             } else {
-                $this->logger->log(LogLevel::INFO, 'Initialize: Existing target row without history initialized', $this->getLogData());
+                $this->logger->log(LogLevel::DEBUG, 'Initialize: Existing target row without history initialized', $this->getLogData());
             }
 
         } elseif ($result === FALSE) {
@@ -198,7 +198,7 @@ class SimpleSyncService {
             $history_fields = array('field_hashes' => serialize($this->importHashes));
             if ($this->isHistoryUpdate) {
                 if ($GLOBALS['TYPO3_DB']->exec_UPDATEquery('tx_importlib_history', $this->getHistoryWhereClause(), $history_fields)) {
-                    $this->logger->log(LogLevel::INFO, 'Insert/Update: History row updated', $this->getLogData());
+                    $this->logger->log(LogLevel::DEBUG, 'Insert/Update: History row updated', $this->getLogData());
                 } else {
                     $this->logger->log(LogLevel::ERROR, 'Insert/Update: History row update FAILED', $this->getLogData());
                 }
@@ -207,7 +207,7 @@ class SimpleSyncService {
                 $history_fields['table_name'] = $this->tableName;
                 $history_fields['uid'] = $this->uid;
                 if($GLOBALS['TYPO3_DB']->exec_INSERTquery('tx_importlib_history', $history_fields)) {
-                    $this->logger->log(LogLevel::INFO, 'Insert/Update: History row inserted', $this->getLogData());
+                    $this->logger->log(LogLevel::DEBUG, 'Insert/Update: History row inserted', $this->getLogData());
                 } else {
                     $this->logger->log(LogLevel::ERROR, 'Insert/Update: History row insert FAILED', $this->getLogData());
                 }
@@ -234,7 +234,7 @@ class SimpleSyncService {
             foreach ($deleteRows as $deleteRow) {
                 $deleteUids[] = $deleteRow['uid'];
                 $logData['uid'] = $deleteRow['uid'];
-                $this->logger->log(LogLevel::INFO, 'Delete: Absent target row found', $logData);
+                $this->logger->log(LogLevel::DEBUG, 'Delete: Absent target row found', $logData);
             }
         }
         if (empty($deleteUids)) {
@@ -242,7 +242,7 @@ class SimpleSyncService {
         } else {
             $uidWhereClause = 'uid IN (' . implode(', ', $deleteUids) . ')';
             if ($GLOBALS['TYPO3_DB']->exec_DELETEquery('tx_importlib_history', $uidWhereClause . ' AND ' . $this->getHistoryBaseWhereClause())) {
-                $this->logger->log(LogLevel::INFO, 'Delete: Absent histroy rows deleted', $this->getBaseLogData());
+                $this->logger->log(LogLevel::DEBUG, 'Delete: Absent histroy rows deleted', $this->getBaseLogData());
             } else {
                 $this->logger->log(LogLevel::ERROR, 'Delete: Absent history rows delete FAILED', $this->getBaseLogData());
             }

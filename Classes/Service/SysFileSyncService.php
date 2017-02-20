@@ -140,9 +140,9 @@ class SysFileSyncService {
 
         if ($syncResource) {
             if ($fileData = \TYPO3\CMS\Core\Utility\GeneralUtility::getURL($url)) {
-                $this->logger->log(LogLevel::INFO, 'Sync Resource: Loaded file from URL', $this->getLogData());
+                $this->logger->log(LogLevel::DEBUG, 'Sync Resource: Loaded file from URL', $this->getLogData());
                 if (\TYPO3\CMS\Core\Utility\GeneralUtility::writeFile($fullLocalPath, $fileData)) {
-                    $this->logger->log(LogLevel::INFO, 'Sync Resource: Wrote file to local', $this->getLogData());
+                    $this->logger->log(LogLevel::DEBUG, 'Sync Resource: Wrote file to local', $this->getLogData());
                 } else {
                     $this->logger->log(LogLevel::ERROR, 'Sync Resource: Write file to local FAILED', $this->getLogData());
                 }
@@ -153,7 +153,7 @@ class SysFileSyncService {
 
         if ($fileObject = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance()->retrieveFileOrFolderObject($fullLocalPath)) {
             $uid = $fileObject->getUid();
-            $this->logger->log(LogLevel::INFO, 'Sync Resource: Read file from local', $this->getLogData());
+            $this->logger->log(LogLevel::DEBUG, 'Sync Resource: Read file from local', $this->getLogData());
         } else  {
             $this->logger->log(LogLevel::ERROR, 'Sync Resource: Read file from local FAILED', $this->getLogData());
         }
