@@ -249,14 +249,20 @@ class SimpleSyncService {
      * Deletes previously imported rows which are not present in the current import anymore. Import history data are
      * deleted. For the actual records only the delete flag is updated to avoid any conflicts with existing references.
      *
+     * @param bool $deleteAll TRUE = Delete any records. FALSE = Delete records imported by the importlib only.
+     *
      * @return array Uids which got deleted.
      */
-    public function deleteAbsentRows() {
+    public function deleteAbsentRows($deleteAll = FALSE) {
         $deleteUids = array();
         /* Only rows existing in the tx_importlib_history table have to be deleted. Others are not created by this
         import and must not be deleted. */
         if (! empty($this->presentUids)) {
-            $deleteRows = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows('uid', 'tx_importlib_history', 'uid NOT IN (' . implode(', ', $this->presentUids) . ') AND ' . $this->getHistoryBaseWhereClause());
+            if ($deleteAll === TRUE) {
+                $deleteRows = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows('uid', $this->tableName, 'uid NOT IN (' . implode(', ', $this->presentUids) . ')');
+            } else {
+                $deleteRows = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows('uid', 'tx_importlib_history', 'uid NOT IN (' . implode(', ', $this->presentUids) . ') AND ' . $this->getHistoryBaseWhereClause());
+            }
             $logData = $this->getBaseLogData();
             foreach ($deleteRows as $deleteRow) {
                 $deleteUids[] = $deleteRow['uid'];
