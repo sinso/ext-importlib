@@ -246,14 +246,13 @@ class SimpleSyncService {
     }
 
     /**
-     * Deletes previously imported rows which are not present in the current import anymore. Import history data are
-     * deleted. For the actual records only the delete flag is updated to avoid any conflicts with existing references.
+     * Returns the list of uids of previously imported rows which are not present in the current import anymore.
      *
      * @param bool $deleteAll TRUE = Delete any records. FALSE = Delete records imported by the importlib only.
      *
-     * @return array Uids which got deleted.
+     * @return array Uids which shall be deleted
      */
-    public function deleteAbsentRows($deleteAll = FALSE) {
+    public function getAbsentRowsToDelete($deleteAll = FALSE) {
         $deleteUids = array();
         /* Only rows existing in the tx_importlib_history table have to be deleted. Others are not created by this
         import and must not be deleted. */
@@ -270,6 +269,18 @@ class SimpleSyncService {
                 $this->logger->log(LogLevel::DEBUG, 'Delete: Absent target row found', $logData);
             }
         }
+        return $deleteUids;
+    }
+
+    /**
+     * Deletes previously imported rows which are not present in the current import anymore. Import history data are
+     * deleted. For the actual records only the delete flag is updated to avoid any conflicts with existing references.
+     *
+     * @param array $deleteUids List of uids of the records to be deleted
+     *
+     * @return array Uids which got deleted.
+     */
+    public function deleteAbsentRows($deleteUids) {
         if (empty($deleteUids)) {
             $this->logger->log(LogLevel::INFO, 'Delete: No absent target rows for delete found', $this->getBaseLogData());
         } else {
