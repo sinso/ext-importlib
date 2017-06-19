@@ -43,7 +43,8 @@ Sample for basic usage:
             }
             
         }
-        $this->simpleSyncService->deleteAbsentRows();
+        $uidsToDelete = $this->simpleSyncService->getAbsentRowsToDelete();
+        $this->simpleSyncService->deleteAbsentRows($uidsToDelete);
         $this->sysFileSyncService->deleteAbsentRows();
      }
 

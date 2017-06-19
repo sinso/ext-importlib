@@ -28,6 +28,7 @@ namespace Sinso\Importlib\Service;
  ***************************************************************/
 
 use TYPO3\CMS\Core\Log\LogLevel;
+use TYPO3\CMS\Core\Resource\ResourceFactory;
 
 /**
  * Class SysFileSyncService
@@ -131,10 +132,52 @@ class SysFileSyncService {
      * Deletes previously imported rows which are not present in the current import anymore. Only the delete flag is
      * updated and therefore resource files must not be physically deleted.
      *
+     * @param bool $deletePhysicalResources
+     *
      * @return array
      */
-    public function deleteAbsentRows() {
-        return $this->simpleSyncService->deleteAbsentRows();
+    public function deleteAbsentRows($deletePhysicalResources = FALSE) {
+        $deleteUids = $this->simpleSyncService->getAbsentRowsToDelete();
+
+        if ($deletePhysicalResources) {
+            $deletedFileUids = array();
+
+            foreach ($deleteUids as $uid) {
+                $fileReferenceRow = $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow('*', 'sys_file_reference', "uid=$uid");
+                $fileUid = (int)($fileReferenceRow['uid_local'] ?? 0);
+
+                if ($fileUid === 0 || in_array($fileUid, $deletedFileUids)) {
+                    continue;
+                }
+
+                $referencesToThisFile = $GLOBALS['TYPO3_DB']->exec_SELECTgetRows('uid', 'sys_file_reference', "uid_local=$fileUid and deleted=0");
+                $referencesToThisFileCount = count($referencesToThisFile);
+
+                $canDeleteFile = $referencesToThisFileCount === 1;
+                if (!$canDeleteFile) {
+                    $count = 0;
+                    foreach ($referencesToThisFile as $referenceToThisFile) {
+                        if (in_array($referenceToThisFile['uid'], $deleteUids)) {
+                            $count++;
+                        }
+                    }
+                    if ($count === $referencesToThisFileCount) {
+                        $canDeleteFile = TRUE;
+                    }
+                }
+
+                if ($canDeleteFile) {
+                    try {
+                        $resourceFactory = ResourceFactory::getInstance();
+                        $fileReference = $resourceFactory->getFileReferenceObject($uid, $fileReferenceRow);
+                        $deleted = $fileReference->getOriginalFile()->delete();
+                        $deletedFileUids[] = $fileUid;
+                    } catch (\Exception $e) {}
+                }
+            }
+        }
+
+        return $this->simpleSyncService->deleteAbsentRows($deleteUids);
     }
 
     /**
